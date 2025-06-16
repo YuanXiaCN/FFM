@@ -1,0 +1,28 @@
+{
+  "appId": "com.example.mc",
+  "productName": "MC Launcher",
+  "directories": {
+    "output": "build"
+  },  "files": [
+    "dist/**/*",
+    "main.cjs",
+    "preload.cjs",
+    "utils.cjs",
+    "main-auth-service.cjs",
+    "main-config-service.cjs",
+    "main-download-service.cjs",
+    "download-worker.cjs",
+    "mc.ini",
+    "FFM.json", 
+    "FFM.log",
+    "node_modules/**/*"
+  ],
+  "win": {
+    "target": "nsis"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true
+  }
+}
