@@ -113,5 +113,7 @@ test.md
 yarn.lock
 pnpm-lock.yaml
 
-# GitHub Copilot instructions
+# GitHub specific files
 .github/copilot-instructions.md
+# Allow workflows but exclude copilot instructions
+!.github/workflows/
