@@ -31,6 +31,8 @@ process.on('unhandledRejection', (reason, promise) => {
 try {
     require('./main-config-service.cjs');
     require('./main-download-service.cjs');
+    require('./main-version-service.cjs');
+    require('./main-launch-service.cjs');
 } catch (error) {
     logToFile(`服务导入错误: ${error.message}`);
     console.error('服务导入错误:', error);

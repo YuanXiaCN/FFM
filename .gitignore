@@ -117,3 +117,5 @@ pnpm-lock.yaml
 .github/copilot-instructions.md
 # Allow workflows but exclude copilot instructions
 !.github/workflows/
+.minecraft/
+temp/

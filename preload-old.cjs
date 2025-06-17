@@ -41,8 +41,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         console.log('preload: windowClose 被调用');
         ipcRenderer.send('window-close');
     },
-    
-    // 下载相关API
+      // 下载相关API
     startDownload: (options) => ipcRenderer.invoke('download:start', options),
     cancelDownload: () => ipcRenderer.invoke('download:cancel'),
     onDownloadProgress: (callback) => {
@@ -78,6 +77,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('game:error', wrappedCallback);
         return () => ipcRenderer.removeListener('game:error', wrappedCallback);
     },
+        
+        if (!cleanupCallbacks.has('download:progress')) {
+            cleanupCallbacks.set('download:progress', []);
+        }
+        cleanupCallbacks.get('download:progress').push(wrappedCallback);
+        
+        return () => {
+            ipcRenderer.removeListener('download:progress', wrappedCallback);
+            const callbacks = cleanupCallbacks.get('download:progress');
+            const index = callbacks.indexOf(wrappedCallback);
+            if (index > -1) {
+                callbacks.splice(index, 1);
+            }
+        };
+    },
     
     // 事件监听
     onMaximized: (callback) => handleEventListener('window-maximized', callback),
@@ -91,23 +105,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // 设置相关
     loadSettings: () => ipcRenderer.invoke('load-settings'),
     saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
-    
-    // Java相关API
+      // Java相关API
     searchJava: () => ipcRenderer.invoke('searchJava'),
     importJava: (path) => ipcRenderer.invoke('importJava', path),
-    getJavaConfigs: () => ipcRenderer.invoke('getJavaConfigs'),
-    
-    // Minecraft账号管理API
+    getJavaConfigs: () => ipcRenderer.invoke('getJavaConfigs'),    // Minecraft账号管理API
     getMinecraftAccounts: () => ipcRenderer.invoke('getMinecraftAccounts'),
     getSelectedAccount: () => ipcRenderer.invoke('getSelectedAccount'),
-    setSelectedAccount: (accountId) => ipcRenderer.invoke('setSelectedAccount', accountId),
-    saveMinecraftAccount: (account) => ipcRenderer.invoke('saveMinecraftAccount', account),
+    setSelectedAccount: (accountId) => ipcRenderer.invoke('setSelectedAccount', accountId),    saveMinecraftAccount: (account) => ipcRenderer.invoke('saveMinecraftAccount', account),
     deleteMinecraftAccount: (accountId) => ipcRenderer.invoke('deleteMinecraftAccount', accountId),
     cleanupDuplicateAccounts: () => ipcRenderer.invoke('cleanupDuplicateAccounts'),
     startMicrosoftLogin: () => ipcRenderer.invoke('startMicrosoftLogin'),
-    refreshMinecraftAccount: (accountId) => ipcRenderer.invoke('refreshMinecraftAccount', accountId),
-    
-    // 文件选择对话框
+    refreshMinecraftAccount: (accountId) => ipcRenderer.invoke('refreshMinecraftAccount', accountId),    // 文件选择对话框
     selectFile: (options) => ipcRenderer.invoke('dialog:openFile', options),
     
     // 配置服务
@@ -121,45 +129,61 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getLogContent: (lines) => ipcRenderer.invoke('getLogContent', lines),
     clearLog: () => ipcRenderer.invoke('clearLog'),
     
-    // Microsoft登录事件监听
+    // 添加事件监听API
     onMicrosoftLoginSuccess: (callback) => {
         const wrappedCallback = (event, account) => callback(account);
         ipcRenderer.on('microsoft-login-success', wrappedCallback);
-        return () => ipcRenderer.removeListener('microsoft-login-success', wrappedCallback);
+        
+        // 存储清理函数
+        if (!cleanupCallbacks.has('microsoft-login-success')) {
+            cleanupCallbacks.set('microsoft-login-success', []);
+        }
+        cleanupCallbacks.get('microsoft-login-success').push(wrappedCallback);
+        
+        // 返回清理函数
+        return () => {
+            ipcRenderer.removeListener('microsoft-login-success', wrappedCallback);
+            const callbacks = cleanupCallbacks.get('microsoft-login-success');
+            const index = callbacks.indexOf(wrappedCallback);
+            if (index > -1) {
+                callbacks.splice(index, 1);
+            }
+        };
     },
     onMicrosoftLoginCancelled: (callback) => {
         const wrappedCallback = (event) => callback();
         ipcRenderer.on('microsoft-login-cancelled', wrappedCallback);
-        return () => ipcRenderer.removeListener('microsoft-login-cancelled', wrappedCallback);
-    },
-    
-    // 清理所有事件监听器
-    removeAllListeners: (channel) => {
-        if (channel) {
-            ipcRenderer.removeAllListeners(channel);
-            if (cleanupCallbacks.has(channel)) {
-                cleanupCallbacks.delete(channel);
-            }
-        } else {
-            // 清理所有记录的监听器
-            for (const [ch, callbacks] of cleanupCallbacks) {
-                for (const callback of callbacks) {
-                    ipcRenderer.removeListener(ch, callback);
-                }
-            }
-            cleanupCallbacks.clear();
+        
+        if (!cleanupCallbacks.has('microsoft-login-cancelled')) {
+            cleanupCallbacks.set('microsoft-login-cancelled', []);
         }
-    }
-});
-
-// 暴露electron对象（兼容旧代码）
-contextBridge.exposeInMainWorld('electron', {
-    startDownload: (options) => ipcRenderer.invoke('download:start', options),
-    cancelDownload: () => ipcRenderer.invoke('download:cancel'),
-    onDownloadProgress: (callback) => {
-        const wrappedCallback = (event, progress) => callback(progress);
-        ipcRenderer.on('download:progress', wrappedCallback);
-        return () => ipcRenderer.removeListener('download:progress', wrappedCallback);
+        cleanupCallbacks.get('microsoft-login-cancelled').push(wrappedCallback);
+        
+        return () => {
+            ipcRenderer.removeListener('microsoft-login-cancelled', wrappedCallback);
+            const callbacks = cleanupCallbacks.get('microsoft-login-cancelled');
+            const index = callbacks.indexOf(wrappedCallback);
+            if (index > -1) {
+                callbacks.splice(index, 1);
+            }
+        };
     },
-    removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
+    onMicrosoftLoginError: (callback) => {
+        const wrappedCallback = (event, error) => callback(error);
+        ipcRenderer.on('microsoft-login-error', wrappedCallback);
+        
+        if (!cleanupCallbacks.has('microsoft-login-error')) {
+            cleanupCallbacks.set('microsoft-login-error', []);
+        }
+        cleanupCallbacks.get('microsoft-login-error').push(wrappedCallback);
+        
+        return () => {
+            ipcRenderer.removeListener('microsoft-login-error', wrappedCallback);
+            const callbacks = cleanupCallbacks.get('microsoft-login-error');
+            const index = callbacks.indexOf(wrappedCallback);
+            if (index > -1) {
+                callbacks.splice(index, 1);
+            }
+        };
+    },
 });

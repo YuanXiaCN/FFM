@@ -22,6 +22,7 @@
     "electron-sudo": "^4.0.12",
     "fs-extra": "^11.2.0",
     "iconv-lite": "^0.6.3",
+    "jszip": "^3.10.1",
     "vue": "^3.3.4",
     "vue-router": "^4.2.5"
   },

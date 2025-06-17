@@ -14,11 +14,10 @@ const routes = [
     path: '/home', 
     name: 'Home',
     component: () => import('@/views/Home.vue')
-  },
-  {
+  },  {
     path: '/download-progress',
     name: 'DownloadProgress',
-    component: () => import('@views/DownloadProgress.vue')
+    component: () => import('@/views/DownloadProgress.vue')
   },
   {
     path: '/download',

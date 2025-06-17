@@ -61,7 +61,7 @@
                     <div class="version-display">
                         <span class="install-version">Minecraft {{ selectedVersionName }} </span>
                     </div>
-                    <button class="install-btn" :disabled="!selectedLoader || !selectedShader" @click="confirmDownload">开始下载</button>
+                    <button class="install-btn" @click="confirmDownload">开始下载</button>
                 </div>
             </div>
 
@@ -109,8 +109,8 @@ const versions = ref([])
 const loading = ref(true)
 const selectedVersion = ref(props.selectedVersion ? props.selectedVersion.id : '')
 const editableVersionName = ref('')
-const selectedLoader = ref('')
-const selectedShader = ref('')
+const selectedLoader = ref('') // 默认为空，未选择时使用原版
+const selectedShader = ref('') // 默认为空，未选择时不使用光影
 const errorMsg = ref('')
 
 // 新增状态
@@ -158,9 +158,7 @@ const availableShaders = computed(() => {
         let status = ''
         let available = true
         
-        if (shader.type === 'none') {
-            available = true
-        } else if (shader.type === 'optifine') {
+        if (shader.type === 'optifine') {
             status = '没有可用版本'
             available = false
         } else if (shader.type === 'iris') {
@@ -189,10 +187,10 @@ function selectVersion(ver) {
 function selectLoader(loader) {
     selectedLoader.value = loader.type
     // 当选择了不同的加载器时，重置光影选择
-    if (selectedShader.value && selectedShader.value !== 'none') {
+    if (selectedShader.value && selectedShader.value !== '') {
         const availableShader = availableShaders.value.find(s => s.type === selectedShader.value)
         if (!availableShader || !availableShader.available) {
-            selectedShader.value = 'none'
+            selectedShader.value = ''
         }
     }
     errorMsg.value = ''
@@ -290,49 +288,38 @@ function confirmDownload() {
     // 调试输出
     console.log('下载参数', selectedVersion.value, selectedLoader.value, selectedShader.value)
     console.log('用户编辑的版本名称:', editableVersionName.value)
-    if (!selectedVersion.value || !selectedLoader.value || !selectedShader.value) {
-        errorMsg.value = '请完成所有选择'
+    if (!selectedVersion.value) {
+        errorMsg.value = '请选择Minecraft版本'
         return
     }
     
-    // 更新状态提示
-    errorMsg.value = '正在启动下载...';
+    // 如果用户未选择加载器，使用原版
+    const actualLoader = selectedLoader.value || 'vanilla'
+    // 如果用户未选择光影，使用无光影
+    const actualShader = selectedShader.value || 'none'
     
-    console.log('开始导入下载管理器...');
-    import('@/services/DownloadManager').then(dm => {
-        console.log('下载管理器已加载，准备开始下载');
-        dm.default.startDownload({
+    // 更新状态提示
+    errorMsg.value = '正在准备下载...';
+    
+    console.log('准备跳转到下载监控页面...');
+    
+    // 先关闭当前弹窗
+    emit('close');
+    
+    // 立即跳转到下载进度页面，携带下载参数
+    router.push({
+        path: '/download-progress',
+        query: {
             version: selectedVersion.value,
-            loader: selectedLoader.value,
-            shader: selectedShader.value,
-            customName: editableVersionName.value || selectedVersionName.value // 添加用户自定义名称
-        }).then(result => {
-            console.log('下载启动结果:', result);
-            
-            // 关闭当前弹窗
-            emit('close');
-              // 导航到下载进度页面，并传递参数
-            console.log('准备导航到下载进度页面...');
-            router.push({
-                path: '/download-progress',
-                query: {
-                    version: selectedVersion.value,
-                    loader: selectedLoader.value,
-                    shader: selectedShader.value,
-                    customName: editableVersionName.value || selectedVersionName.value
-                }
-            }).then(() => {
-                console.log('导航完成');
-            }).catch(error => {
-                console.error('导航失败:', error);
-            });
-        }).catch(error => {
-            console.error('下载启动失败:', error);
-            errorMsg.value = `下载启动失败: ${error.message || '未知错误'}`;
-        });
+            loader: actualLoader,
+            shader: actualShader,
+            customName: editableVersionName.value || selectedVersionName.value,
+            autoStart: 'true' // 标记自动启动下载
+        }
+    }).then(() => {
+        console.log('已成功跳转到下载监控页面');
     }).catch(error => {
-        console.error('加载下载管理器失败:', error);
-        errorMsg.value = '加载下载管理器失败';
+        console.error('跳转失败:', error);
     });
 }
 </script>
