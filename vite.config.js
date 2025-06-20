@@ -15,6 +15,22 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: '../../dist'
+    outDir: '../../dist',
+    rollupOptions: {
+      external: ['electron', 'fs', 'path', 'os', 'child_process', 'crypto', 'util', 'events', 'stream']
+    }
+  },
+  define: {
+    // 定义全局变量，避免Node.js变量在浏览器中使用
+    global: 'globalThis',
+    __dirname: '"."',
+    __filename: '"."',
+    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    'process.platform': '"browser"',
+    'process.env': '{}',
+    process: '{"env": {"NODE_ENV": "development"}, "platform": "browser"}'
+  },
+  optimizeDeps: {
+    exclude: ['electron', 'fs', 'path', 'os', 'child_process', 'crypto', 'util', 'events', 'stream']
   }
 })

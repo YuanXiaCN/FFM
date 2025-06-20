@@ -6,6 +6,12 @@ const path = require('path')
 const iconv = require('iconv-lite');
 const { logger, LOG_LEVELS, logToFile } = require('./utils.cjs');
 
+// 导入调试启动器
+const { setupDebugLogging } = require('./start-debug-download.cjs');
+
+// 设置调试日志记录
+setupDebugLogging();
+
 // 自动更新（仅在生产环境中使用）
 let autoUpdater = null;
 try {
@@ -30,9 +36,15 @@ process.on('unhandledRejection', (reason, promise) => {
 // 导入服务
 try {
     require('./main-config-service.cjs');
-    require('./main-download-service.cjs');
+    // 使用新的下载服务
+    const newDownloadService = require('./src/services/NewMainDownloadService.cjs');
+    newDownloadService.getInstance(); // 初始化新的下载服务
+    
     require('./main-version-service.cjs');
     require('./main-launch-service.cjs');
+    // 注释掉旧的服务
+    // require('./main-download-service.cjs');
+    // require('./src/services/IntegrityAndRepairService.cjs');
 } catch (error) {
     logToFile(`服务导入错误: ${error.message}`);
     console.error('服务导入错误:', error);
@@ -759,6 +771,16 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
     logToFile('所有窗口已关闭');
+    
+    // 清理新的下载服务
+    try {
+        const newDownloadService = require('./src/services/NewMainDownloadService.cjs');
+        newDownloadService.cleanup();
+        logToFile('新下载服务已清理');
+    } catch (error) {
+        logToFile(`清理下载服务失败: ${error.message}`);
+    }
+    
     if (process.platform !== 'darwin') {
         logToFile('非macOS平台，准备退出应用');
         app.quit()
@@ -767,6 +789,15 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
     logToFile('应用准备退出');
+    
+    // 清理新的下载服务
+    try {
+        const newDownloadService = require('./src/services/NewMainDownloadService.cjs');
+        newDownloadService.cleanup();
+        logToFile('下载服务清理完成');
+    } catch (error) {
+        logToFile(`下载服务清理失败: ${error.message}`);
+    }
 })
 
 app.on('will-quit', (event) => {

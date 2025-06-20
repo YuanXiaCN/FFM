@@ -1,59 +1,71 @@
 <template>
   <div class="download-page">
     <h1 class="page-title">版本下载</h1>
-    <p class="description">从官方源或镜像站下载 Minecraft 版本</p>
-
-    <div class="filters">
-      <div class="filter-group">
-        <label>版本类型：</label>
-        <div class="filter-buttons">
-          <button 
-            :class="['filter-btn', versionType === 'all' ? 'active' : '']"
-            @click="versionType = 'all'"
-          >
-            所有
-          </button>
-          <button 
-            :class="['filter-btn', versionType === 'release' ? 'active' : '']"
-            @click="versionType = 'release'"
-          >
-            稳定版
-          </button>
-          <button 
-            :class="['filter-btn', versionType === 'snapshot' ? 'active' : '']"
-            @click="versionType = 'snapshot'"
-          >
-            快照版
-          </button>
-          <button 
-            :class="['filter-btn', versionType === 'old_beta' ? 'active' : '']"
-            @click="versionType = 'old_beta'"
-          >
-            Beta版
-          </button>
-          <button 
-            :class="['filter-btn', versionType === 'old_alpha' ? 'active' : '']"
-            @click="versionType = 'old_alpha'"
-          >
-            Alpha版
-          </button>
+    <p class="description">从官方源或镜像站下载 Minecraft 版本</p>    <div class="filters">
+      <!-- 下载源状态 -->
+      <div class="source-status">
+        <span class="source-label">当前源：</span>
+        <span class="source-name">{{ DOWNLOAD_SOURCES[currentSourceIndex]?.label || '检测中...' }}</span>
+        <button class="refresh-btn" @click="fetchVersions" :disabled="loading">
+          {{ loading ? '加载中...' : '刷新' }}
+        </button>
+      </div>
+        
+      <div class="filter-row">
+        <div class="filter-group">
+          <label>版本类型：</label>
+          <div class="filter-buttons">
+            <button 
+              :class="['filter-btn', versionType === 'all' ? 'active' : '']"
+              @click="versionType = 'all'"
+            >
+              所有
+            </button>
+            <button 
+              :class="['filter-btn', versionType === 'release' ? 'active' : '']"
+              @click="versionType = 'release'"
+            >
+              稳定版
+            </button>
+            <button 
+              :class="['filter-btn', versionType === 'snapshot' ? 'active' : '']"
+              @click="versionType = 'snapshot'"
+            >
+              快照版
+            </button>
+            <button 
+              :class="['filter-btn', versionType === 'old_beta' ? 'active' : '']"
+              @click="versionType = 'old_beta'"
+            >
+              Beta版
+            </button>
+            <button 
+              :class="['filter-btn', versionType === 'old_alpha' ? 'active' : '']"
+              @click="versionType = 'old_alpha'"
+            >
+              Alpha版
+            </button>
+          </div>
+        </div>
+        
+        <div class="search-box">
+          <input 
+            type="text" 
+            v-model="searchQuery" 
+            placeholder="搜索版本..." 
+            class="search-input" 
+          />
         </div>
       </div>
-      
-      <div class="search-box">
-        <input 
-          type="text" 
-          v-model="searchQuery" 
-          placeholder="搜索版本..." 
-          class="search-input" 
-        />
-      </div>
-    </div>
-
-    <div class="versions-container">
+    </div>    <div class="versions-container">
       <div v-if="loading" class="loading-indicator">
         <div class="spinner"></div>
         <span>正在加载版本列表...</span>
+      </div>
+      <div v-else-if="errorMessage" class="error-message">
+        <div class="error-icon">⚠️</div>
+        <div class="error-text">{{ errorMessage }}</div>
+        <button class="retry-btn" @click="fetchVersions">重试</button>
       </div>
       <div v-else-if="filteredVersions.length === 0" class="no-versions">
         没有找到匹配的版本
@@ -98,19 +110,39 @@ const versionType = ref('all');
 const searchQuery = ref('');
 const showDownloadSelect = ref(false);
 const selectedVersion = ref(null);
+const currentSourceIndex = ref(1); // 默认使用 BMCLAPI 镜像源 (索引1)
+const errorMessage = ref(''); // 错误消息
 
-// 获取版本列表
+// 获取版本列表，支持多源重试
 async function fetchVersions() {
   loading.value = true;
-  try {
-    const manifestUrl = DOWNLOAD_SOURCES[0].meta.versionManifest;
-    const res = await axios.get(manifestUrl);
-    versions.value = res.data.versions;
-  } catch (error) {
-    console.error('获取版本列表失败:', error);
-  } finally {
-    loading.value = false;
+  errorMessage.value = ''; // 清除之前的错误消息
+  
+  // 尝试所有下载源
+  for (let i = 0; i < DOWNLOAD_SOURCES.length; i++) {
+    const sourceIndex = (currentSourceIndex.value + i) % DOWNLOAD_SOURCES.length;
+    const source = DOWNLOAD_SOURCES[sourceIndex];
+    
+    try {
+      console.log(`尝试使用 ${source.label} 获取版本列表...`);
+      const manifestUrl = source.meta.versionManifest;
+      const res = await axios.get(manifestUrl, { timeout: 10000 }); // 10秒超时
+      versions.value = res.data.versions;
+      currentSourceIndex.value = sourceIndex; // 记录成功的源
+      console.log(`成功从 ${source.label} 获取版本列表，共 ${res.data.versions.length} 个版本`);
+      loading.value = false;
+      return;
+    } catch (error) {
+      console.warn(`从 ${source.label} 获取版本列表失败:`, error.message);
+      if (i === DOWNLOAD_SOURCES.length - 1) {
+        // 所有源都失败了
+        console.error('所有下载源都无法访问，请检查网络连接');
+        errorMessage.value = '无法连接到任何下载源，请检查网络连接或稍后重试';
+      }
+    }
   }
+  
+  loading.value = false;
 }
 
 // 版本类型过滤
@@ -184,8 +216,55 @@ onMounted(fetchVersions);
 
 .filters {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   margin-bottom: 24px;
+  gap: 16px;
+}
+
+.source-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.source-label {
+  color: #aaa;
+}
+
+.source-name {
+  color: #4f8cff;
+  font-weight: 500;
+}
+
+.refresh-btn {
+  padding: 6px 12px;
+  background: #4f8cff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-left: auto;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: #3d7ae8;
+}
+
+.refresh-btn:disabled {
+  background: #666;
+  cursor: not-allowed;
+}
+
+.filter-row {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   gap: 16px;
@@ -237,6 +316,51 @@ onMounted(fetchVersions);
 }
 
 .loading-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 0;
+  color: #666;
+  gap: 16px;
+}
+
+.error-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 0;
+  color: #ff6b6b;
+  gap: 16px;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 3rem;
+}
+
+.error-text {
+  font-size: 1.1rem;
+  max-width: 400px;
+}
+
+.retry-btn {
+  padding: 10px 20px;
+  background: #4f8cff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.retry-btn:hover {
+  background: #3d7ae8;
+}
+
+.no-versions {
   display: flex;
   flex-direction: column;
   align-items: center;

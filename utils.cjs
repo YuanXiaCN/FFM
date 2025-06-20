@@ -24,18 +24,31 @@ const LOG_LEVEL_NAMES = {
  * 统一日志记录类
  */
 class Logger {
-    constructor(logLevel = LOG_LEVELS.INFO) {
+    constructor(logLevel = LOG_LEVELS.DEBUG) { // 默认设置为DEBUG级别
         this.logLevel = logLevel;
         // 修复：使用 electron app.getPath('userData') 获取用户数据目录
         const { app } = require('electron');
         const userDataPath = app.getPath('userData');
         this.logPath = path.join(userDataPath, 'FFM.log');
-          // 确保日志目录存在
+        this.debugLogPath = path.join(userDataPath, 'FFM-debug.log');
+        
+        // 确保日志目录存在
         try {
             const logDir = path.dirname(this.logPath);
             if (!fs.existsSync(logDir)) {
                 fs.mkdirSync(logDir, { recursive: true });
             }
+            
+            // 在启动时写入分隔符
+            this.writeLog(this.logPath, '='.repeat(80), 'INFO');
+            this.writeLog(this.logPath, `启动时间: ${new Date().toISOString()}`, 'INFO');
+            this.writeLog(this.logPath, '='.repeat(80), 'INFO');
+            
+            // Debug日志文件
+            this.writeLog(this.debugLogPath, '='.repeat(80), 'DEBUG');
+            this.writeLog(this.debugLogPath, `Debug日志启动: ${new Date().toISOString()}`, 'DEBUG');
+            this.writeLog(this.debugLogPath, '='.repeat(80), 'DEBUG');
+            
         } catch (error) {
             // 这里仍使用console.error因为logger还未完全初始化
             console.error('创建日志目录失败:', error);

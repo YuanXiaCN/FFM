@@ -17,7 +17,7 @@ const routes = [
   },  {
     path: '/download-progress',
     name: 'DownloadProgress',
-    component: () => import('@/views/DownloadProgress.vue')
+    component: () => import('@/views/DownloadProgress-fixed.vue')
   },
   {
     path: '/download',

@@ -39,16 +39,84 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     windowClose: () => {
         console.log('preload: windowClose 被调用');
-        ipcRenderer.send('window-close');
-    },
+        ipcRenderer.send('window-close');    },    // 新的下载相关API
+    startDownload: (options) => ipcRenderer.invoke('download:startVersion', options),
+    getVersions: (type) => ipcRenderer.invoke('download:getVersions', type),
+    pauseDownload: () => ipcRenderer.invoke('download:pause'),
+    resumeDownload: () => ipcRenderer.invoke('download:resume'),
+    stopDownload: () => ipcRenderer.invoke('download:stop'),
+    checkIntegrity: (versionId) => ipcRenderer.invoke('download:checkIntegrity', versionId),
+    repairVersion: (versionId) => ipcRenderer.invoke('download:repairVersion', versionId),
+    getInstalledVersions: () => ipcRenderer.invoke('download:getInstalledVersions'),
+    deleteVersion: (versionId) => ipcRenderer.invoke('download:deleteVersion', versionId),
+    testConnection: () => ipcRenderer.invoke('download:testConnection'),
     
-    // 下载相关API
-    startDownload: (options) => ipcRenderer.invoke('download:start', options),
-    cancelDownload: () => ipcRenderer.invoke('download:cancel'),
+    // 兼容旧API
+    cancelDownload: () => ipcRenderer.invoke('download:stop'),
+    
+    // 新的下载事件监听
     onDownloadProgress: (callback) => {
         const wrappedCallback = (event, progress) => callback(progress);
         ipcRenderer.on('download:progress', wrappedCallback);
         return () => ipcRenderer.removeListener('download:progress', wrappedCallback);
+    },
+    onDownloadTaskStarted: (callback) => {
+        const wrappedCallback = (event, task) => callback(task);
+        ipcRenderer.on('download:taskStarted', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:taskStarted', wrappedCallback);
+    },
+    onDownloadTaskCompleted: (callback) => {
+        const wrappedCallback = (event, task) => callback(task);
+        ipcRenderer.on('download:taskCompleted', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:taskCompleted', wrappedCallback);
+    },
+    onDownloadTaskFailed: (callback) => {
+        const wrappedCallback = (event, task) => callback(task);
+        ipcRenderer.on('download:taskFailed', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:taskFailed', wrappedCallback);
+    },
+    onDownloadStatus: (callback) => {
+        const wrappedCallback = (event, status) => callback(status);
+        ipcRenderer.on('download:status', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:status', wrappedCallback);
+    },
+    onDownloadCompleted: (callback) => {
+        const wrappedCallback = (event, result) => callback(result);
+        ipcRenderer.on('download:completed', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:completed', wrappedCallback);
+    },
+    onDownloadError: (callback) => {
+        const wrappedCallback = (event, error) => callback(error);
+        ipcRenderer.on('download:error', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:error', wrappedCallback);
+    },
+    onDownloadShowError: (callback) => {
+        const wrappedCallback = (event, errorData) => callback(errorData);
+        ipcRenderer.on('download:showError', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:showError', wrappedCallback);
+    },    
+    // 旧的完整性检查API（已集成到新下载服务中）
+    // checkIntegrity: (versionId) => ipcRenderer.invoke('integrity:check', versionId),
+    // repairVersion: (versionId) => ipcRenderer.invoke('integrity:repair', versionId),
+    postDownloadProcess: (versionId, versionJson, options) => ipcRenderer.invoke('integrity:postDownload', versionId, versionJson, options),
+    getIntegrityStatus: () => ipcRenderer.invoke('integrity:getStatus'),
+    cancelIntegrityOperation: () => ipcRenderer.invoke('integrity:cancel'),
+    
+    // 旧的完整性检查事件监听（已替换为新的下载事件）
+    onIntegrityProgress: (callback) => {
+        const wrappedCallback = (event, progress) => callback(progress);
+        ipcRenderer.on('download:integrityProgress', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:integrityProgress', wrappedCallback);
+    },
+    onIntegrityComplete: (callback) => {
+        const wrappedCallback = (event, data) => callback(data);
+        ipcRenderer.on('download:integrityComplete', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:integrityComplete', wrappedCallback);
+    },
+    onIntegrityError: (callback) => {
+        const wrappedCallback = (event, data) => callback(data);
+        ipcRenderer.on('download:integrityError', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:integrityError', wrappedCallback);
     },
     
     // 版本管理API
@@ -161,5 +229,23 @@ contextBridge.exposeInMainWorld('electron', {
         ipcRenderer.on('download:progress', wrappedCallback);
         return () => ipcRenderer.removeListener('download:progress', wrappedCallback);
     },
+    onDownloadTaskStarted: (callback) => {
+        const wrappedCallback = (event, task) => callback(task);
+        ipcRenderer.on('download:taskStarted', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:taskStarted', wrappedCallback);
+    },
+    onDownloadTaskCompleted: (callback) => {
+        const wrappedCallback = (event, task) => callback(task);
+        ipcRenderer.on('download:taskCompleted', wrappedCallback);
+        return () => ipcRenderer.removeListener('download:taskCompleted', wrappedCallback);
+    },
+    
+    // 新增：48线程优化相关API
+    getDownloadInfo: () => ipcRenderer.invoke('download:getInfo'),
+    getPerformanceStats: () => ipcRenderer.invoke('download:getPerformanceStats'),
+    getConcurrencyRecommendation: () => ipcRenderer.invoke('download:getConcurrencyRecommendation'),
+    setConcurrency: (newConcurrency) => ipcRenderer.invoke('download:setConcurrency', newConcurrency),
+    resetStats: () => ipcRenderer.invoke('download:resetStats'),
+    
     removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
 });

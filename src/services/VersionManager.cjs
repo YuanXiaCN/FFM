@@ -49,36 +49,228 @@ class VersionManager {
       return []
     }
   }
-  
-  // 检查版本是否完整
+    // 检查版本是否完整
   async isVersionComplete(versionJson, versionId) {
     try {
-      // 检查客户端jar
-      const jarPath = path.join(this.versionsDir, versionId, `${versionId}.jar`)
-      if (!await this.fileExists(jarPath)) {
-        return false
+      const result = await this.checkVersionIntegrity(versionJson, versionId)
+      return result.isComplete
+    } catch (error) {
+      return false
+    }
+  }
+
+  // 详细的完整性检查
+  async checkVersionIntegrity(versionJson, versionId) {
+    const result = {
+      isComplete: true,
+      missingFiles: [],
+      corruptedFiles: [],
+      totalFiles: 0,
+      checkedFiles: 0,
+      details: {
+        client: { exists: false, valid: false },
+        libraries: { total: 0, missing: 0, corrupted: 0 },
+        assets: { total: 0, missing: 0, corrupted: 0 },
+        configs: { exists: false, valid: false }
       }
+    }
+
+    try {
+      // 1. 检查客户端jar文件
+      const jarPath = path.join(this.versionsDir, versionId, `${versionId}.jar`)
+      result.totalFiles++
       
-      // 检查关键依赖库
+      if (await this.fileExists(jarPath)) {
+        result.details.client.exists = true
+        result.checkedFiles++
+        
+        // 验证SHA1（如果有的话）
+        if (versionJson.downloads?.client?.sha1) {
+          const actualSha1 = await this.calculateFileSha1(jarPath)
+          result.details.client.valid = actualSha1 === versionJson.downloads.client.sha1
+          if (!result.details.client.valid) {
+            result.corruptedFiles.push({
+              path: jarPath,
+              type: 'client',
+              expected: versionJson.downloads.client.sha1,
+              actual: actualSha1
+            })
+          }
+        } else {
+          result.details.client.valid = true
+        }
+      } else {
+        result.isComplete = false
+        result.missingFiles.push({
+          path: jarPath,
+          type: 'client',
+          url: versionJson.downloads?.client?.url,
+          sha1: versionJson.downloads?.client?.sha1,
+          size: versionJson.downloads?.client?.size
+        })
+      }
+
+      // 2. 检查依赖库文件
       const librariesDir = path.join(this.mcDirectory, 'libraries')
-      let missingLibraries = 0
-      
       if (versionJson.libraries) {
         for (const library of versionJson.libraries) {
-          if (library.downloads?.artifact) {
+          if (this.shouldDownloadLibrary(library) && library.downloads?.artifact) {
+            result.details.libraries.total++
+            result.totalFiles++
+            
             const libPath = path.join(librariesDir, library.downloads.artifact.path)
-            if (!await this.fileExists(libPath)) {
-              missingLibraries++
+            
+            if (await this.fileExists(libPath)) {
+              result.checkedFiles++
+              
+              // 验证SHA1
+              if (library.downloads.artifact.sha1) {
+                const actualSha1 = await this.calculateFileSha1(libPath)
+                if (actualSha1 !== library.downloads.artifact.sha1) {
+                  result.details.libraries.corrupted++
+                  result.corruptedFiles.push({
+                    path: libPath,
+                    type: 'library',
+                    name: library.name,
+                    expected: library.downloads.artifact.sha1,
+                    actual: actualSha1,
+                    url: library.downloads.artifact.url,
+                    size: library.downloads.artifact.size
+                  })
+                }
+              }
+            } else {
+              result.details.libraries.missing++
+              result.missingFiles.push({
+                path: libPath,
+                type: 'library',
+                name: library.name,
+                url: library.downloads.artifact.url,
+                sha1: library.downloads.artifact.sha1,
+                size: library.downloads.artifact.size
+              })
             }
           }
         }
       }
-      
-      // 允许少量依赖库缺失（可能是平台特定的）
-      return missingLibraries < 5
+
+      // 3. 检查资源文件索引
+      if (versionJson.assetIndex) {
+        const assetIndexPath = path.join(this.mcDirectory, 'assets', 'indexes', `${versionJson.assetIndex.id}.json`)
+        result.totalFiles++
+        
+        if (await this.fileExists(assetIndexPath)) {
+          result.checkedFiles++
+          
+          // 验证资源索引SHA1
+          if (versionJson.assetIndex.sha1) {
+            const actualSha1 = await this.calculateFileSha1(assetIndexPath)
+            if (actualSha1 !== versionJson.assetIndex.sha1) {
+              result.corruptedFiles.push({
+                path: assetIndexPath,
+                type: 'asset-index',
+                expected: versionJson.assetIndex.sha1,
+                actual: actualSha1,
+                url: versionJson.assetIndex.url,
+                size: versionJson.assetIndex.size
+              })
+            }
+          }
+        } else {
+          result.missingFiles.push({
+            path: assetIndexPath,
+            type: 'asset-index',
+            url: versionJson.assetIndex.url,
+            sha1: versionJson.assetIndex.sha1,
+            size: versionJson.assetIndex.size
+          })
+        }
+      }
+
+      // 4. 检查版本配置文件
+      const versionConfigPath = path.join(this.versionsDir, versionId, `${versionId}.json`)
+      if (await this.fileExists(versionConfigPath)) {
+        result.details.configs.exists = true
+        result.details.configs.valid = true
+      }
+
+      // 判断整体完整性
+      result.isComplete = result.missingFiles.length === 0 && result.corruptedFiles.length === 0
+
+      return result
     } catch (error) {
-      return false
+      result.isComplete = false
+      result.error = error.message
+      return result
     }
+  }
+
+  // 检查是否应该下载该库（适配不同操作系统）
+  shouldDownloadLibrary(library) {
+    if (!library.rules) return true
+    
+    let allow = false
+    
+    for (const rule of library.rules) {
+      if (rule.action === 'allow') {
+        if (!rule.os || this.matchesCurrentOS(rule.os)) {
+          allow = true
+        }
+      } else if (rule.action === 'disallow') {
+        if (!rule.os || this.matchesCurrentOS(rule.os)) {
+          allow = false
+        }
+      }
+    }
+    
+    return allow
+  }
+
+  // 检查操作系统匹配
+  matchesCurrentOS(osRule) {
+    const platform = process.platform
+    
+    if (osRule.name) {
+      switch (osRule.name) {
+        case 'windows':
+          return platform === 'win32'
+        case 'linux':
+          return platform === 'linux'
+        case 'osx':
+          return platform === 'darwin'
+        default:
+          return false
+      }
+    }
+    
+    return true
+  }
+  // 计算文件SHA1 - 异步分块读取避免阻塞
+  async calculateFileSha1(filePath) {
+    const crypto = require('crypto')
+    const fs = require('fs')
+    
+    return new Promise((resolve, reject) => {
+      const hash = crypto.createHash('sha1')
+      const stream = fs.createReadStream(filePath, { 
+        highWaterMark: 64 * 1024 // 64KB chunks to avoid blocking
+      })
+      
+      stream.on('data', data => {
+        hash.update(data)
+        // 让出执行权，避免阻塞事件循环
+        setImmediate(() => {})
+      })
+      
+      stream.on('end', () => resolve(hash.digest('hex')))
+      stream.on('error', reject)
+      
+      // 超时保护
+      setTimeout(() => {
+        stream.destroy()
+        reject(new Error('SHA1计算超时'))
+      }, 30000) // 30秒超时
+    })
   }
   
   // 删除版本
